@@ -1,60 +1,30 @@
-import nilearn as nl
-from nilearn.input_data import NiftiLabelsMasker
-import nilearn.connectome as connectome
 import sklearn as skl
 from sklearn.covariance import GraphLassoCV
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
-################## warnings
-import warnings
+def data_reorder(Datadir):
+    ### read fmri signal data (.npy) and DTI network data (matlab matrix)
+    with open(Datadir+'miss_sub.txt','r') as f:
+        filenames = f.read().splitlines()
 
-if not sys.warnoptions:
-    warnings.simplefilter("ignore")
-##################
+    # Datadir = '/home/wen/Documents/gcn_kifp/Data/'
 
-with open(r'/mnt/easystore_8T/Wen_Data/Schizophrenia/subjects.txt','r') as f:
-    filenames = f.read().splitlines()
+    fmri_signals = []
+    DTI_connects = []
+    for file in filenames:
+        fmri_signal = np.load(Datadir+file+'_fmri.npy')
+        fmri_signals.append(fmri_signal)
+        DTI_connectivity = np.loadtxt(Datadir+file+'_fdt_matrix')
+        DTI_connects.append(DTI_connectivity)
 
-dir = r'/mnt/easystore_8T/Wen_Data/Schizophrenia/COBRE_fmri/'
+    ### stack the data in the 3rd dimension
+    fmri_signals=np.stack(fmri_signals,axis=2)
+    DTI_connects=np.stack(DTI_connects,axis=2)
 
-for file in filenames:
+    return fmri_signals, DTI_connects
 
-    print('Running subject '+file+' *******************')
 
-    fmri_template = dir + 'sub-' + file +'_bold_2.feat/warp_func_atlas.nii.gz'
-    fmri_image = dir + 'sub-' + file +'_bold_2.feat/filtered_func_data.nii.gz'
-
-    masker = NiftiLabelsMasker(labels_img=fmri_template,standardize=True)
-    time_series = masker.fit_transform(fmri_image)
-    np.save(dir+'fmri_ROI_signal/'+file, time_series)
-
-    fig, axs = plt.subplots(1,2)
-
-    # print('correlation using GraphLassoCV')
-    # estimator = GraphLassoCV()
-    # graph = estimator.fit(time_series)
-    # im1 = axs[0].matshow(graph.covariance_)
-    # axs[0].set_title('GraphLassoCV')
-    # plt.colorbar(im1)
-    im1 = axs[0].matshow(time_series)
-    axs[0].set_title('Signals')
-    plt.colorbar(im1)
-
-    print('correlation using corrf')
-    estimator = connectome.ConnectivityMeasure()
-    graph = estimator.fit_transform([time_series])[0]
-    im2 = axs[1].matshow(graph)
-    axs[1].set_title('covariance')
-    plt.colorbar(im2)
-
-    # print('correlation using partial_corrf')
-    # estimator = connectome.ConnectivityMeasure(kind='partial correlation')
-    # graph = estimator.fit_transform([time_series])[0]
-    # plt.matshow(graph)
-    # plt.colorbar()
-    # plt.title('covariance')
-
-    fig.savefig(dir+'fmri_ROI_signal_connect_image/'+file+'.png')
-    plt.close(fig)
+if __name__ == '__main__':
+    data_reorder('/home/wen/Documents/gcn_kifp/Data/')
