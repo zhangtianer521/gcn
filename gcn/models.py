@@ -42,7 +42,7 @@ class Model(object):
 
         # Build sequential layer model
         self.activations.append(self.inputs)
-        for layer in self.layers:
+        for layer in self.layers: # each layer would give out a signal (hidden) and store it to activations, hence concatenate layers
             hidden = layer(self.activations[-1])
             self.activations.append(hidden)
         self.outputs = self.activations[-1]
@@ -158,6 +158,8 @@ class GCN(Model):
 
     def _build(self):
 
+        # two layers
+
         self.layers.append(GraphConvolution(input_dim=self.input_dim,
                                             output_dim=FLAGS.hidden1,
                                             placeholders=self.placeholders,
@@ -169,9 +171,59 @@ class GCN(Model):
         self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
                                             output_dim=self.output_dim,
                                             placeholders=self.placeholders,
-                                            act=lambda x: x,
+                                            act=lambda x: x, # lambda function, not non-linear return
                                             dropout=True,
                                             logging=self.logging))
 
     def predict(self):
         return tf.nn.softmax(self.outputs)
+
+    #### Add by Wen Zhang, For multimodal brain network fusion
+
+    class MBF(Model):
+        def __init__(self, placeholders, input_dim, **kwargs):
+            super(GCN, self).__init__(**kwargs)
+
+            self.inputs = placeholders['features']
+            self.input_dim = input_dim
+            # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
+            self.output_dim = placeholders['labels'].get_shape().as_list()[1]
+            self.placeholders = placeholders
+
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+
+            self.build()
+
+        def _loss(self):
+            # Weight decay loss
+            for var in self.layers[0].vars.values():
+                self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
+
+            # Cross entropy error
+            self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
+                                                      self.placeholders['labels_mask'])
+
+        def _accuracy(self):
+            self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
+                                            self.placeholders['labels_mask'])
+
+        def _build(self):
+            # two layers
+
+            self.layers.append(GraphConvolution(input_dim=self.input_dim,
+                                                output_dim=FLAGS.hidden1,
+                                                placeholders=self.placeholders,
+                                                act=tf.nn.relu,
+                                                dropout=True,
+                                                sparse_inputs=True,
+                                                logging=self.logging))
+
+            self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
+                                                output_dim=self.output_dim,
+                                                placeholders=self.placeholders,
+                                                act=lambda x: x,  # lambda function, not non-linear return
+                                                dropout=True,
+                                                logging=self.logging))
+
+        def predict(self):
+            return tf.nn.softmax(self.outputs)

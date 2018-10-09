@@ -47,7 +47,7 @@ else:
 
 # Define placeholders
 placeholders = {
-    'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
+    'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)], # number of adj parametrized matrixes
     'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features[2], dtype=tf.int64)),
     'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
     'labels_mask': tf.placeholder(tf.int32),
@@ -80,7 +80,8 @@ for epoch in range(FLAGS.epochs):
 
     t = time.time()
     # Construct feed dictionary
-    feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
+    feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders) # assign the first 4 values to placeholders
+
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
 
     # Training step
