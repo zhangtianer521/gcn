@@ -32,6 +32,8 @@ class Model(object):
         self.optimizer = None
         self.opt_op = None
 
+        self.output_dim = kwargs.get('output_dim',1)
+
     def _build(self):
         raise NotImplementedError
 
@@ -43,7 +45,7 @@ class Model(object):
         # Build sequential layer model
         self.activations.append(self.inputs)
         for layer in self.layers: # each layer would give out a signal (hidden) and store it to activations, hence concatenate layers
-            hidden = layer(self.activations[-1])
+            hidden = layer(self.activations[-1],self.output_dim)
             self.activations.append(hidden)
         self.outputs = self.activations[-1]
 
@@ -201,16 +203,14 @@ class MBF(Model):
         for var in self.layers[0].vars.values():
             self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
 
-        # Cross entropy error
-        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
-                                                  self.placeholders['labels_mask'])
+        # Cross entropy error, outputs [xn, output_dim], labels [xn, output_dim]
+        self.loss += tf.nn.softmax_cross_entropy_with_logits(logits=self.outputs, labels=self.placeholders['labels'])
 
     def _accuracy(self):
-        self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
-                                        self.placeholders['labels_mask'])
+        self.accuracy = accuracy(self.outputs, self.placeholders['labels'])
 
     def _build(self):
-        # two layers
+        # Three layers
 
         self.layers.append(Batch_GraphConvolution(input_dim=self.input_dim,
                                             output_dim=FLAGS.hidden1,
@@ -220,12 +220,28 @@ class MBF(Model):
                                             sparse_inputs=False,
                                             logging=self.logging))
 
-        self.layers.append(Batch_GraphConvolution(input_dim=FLAGS.hidden1,
-                                            output_dim=self.output_dim,
-                                            placeholders=self.placeholders,
-                                            act=lambda x: x,  # lambda function, not non-linear return
-                                            dropout=True,
-                                            logging=self.logging))
+        # self.layers.append(Batch_GraphConvolution(input_dim=FLAGS.hidden1,
+        #                                     output_dim=self.output_dim,
+        #                                     placeholders=self.placeholders,
+        #                                     act=lambda x: x,  # lambda function, not non-linear return
+        #                                     dropout=True,
+        #                                     logging=self.logging))
+        self.layers.append(Batch_Dense(input_dim=FLAGS.hidden1,
+                                 output_dim=FLAGS.hidden2,
+                                 placeholders=self.placeholders,
+                                 act=tf.nn.relu,
+                                 dropout=True,
+                                 sparse_inputs=False,
+                                 logging=self.logging))
+
+        self.layers.append(Batch_FC(input_dim=FLAGS.hidden2,
+                                       output_dim=FLAGS.output_dim,
+                                       placeholders=self.placeholders,
+                                       act=lambda x: x,
+                                       dropout=True,
+                                       sparse_inputs=False,
+                                       logging=self.logging))
+
 
     def predict(self):
         return tf.nn.softmax(self.outputs)

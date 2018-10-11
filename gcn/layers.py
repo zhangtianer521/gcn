@@ -218,7 +218,7 @@ class Batch_GraphConvolution(Layer):
         if self.logging:
             self._log_vars()
 
-    def _call(self, inputs):
+    def _call(self, inputs, output_dim):  ### input: [xn, xm, xk]; output: [xn, xm, output_dim]
         x = inputs
 
         xn, xm, xk = x.get_shape()
@@ -233,7 +233,7 @@ class Batch_GraphConvolution(Layer):
         supports = list()
         for i in range(len(self.support)):
             if not self.featureless:
-                #### batch only useful to non-sparse inputs, dim(pre_sup) is [xn*xm,T], T is the filters number
+                #### batch only useful to non-sparse inputs, dim(pre_sup) is [xn*xm,output_dim], T is the filters number
                 x=tf.reshape(x,[xn*xm,xk])
                 pre_sup = dot(x, self.vars['weights_' + str(i)],
                               sparse=self.sparse_inputs)
@@ -241,17 +241,120 @@ class Batch_GraphConvolution(Layer):
                 pre_sup = self.vars['weights_' + str(i)]
 
             #### transpost pre_sup to have proper left multiplication
-            _, _, nfilter = pre_sup.get_shape()
-            pre_sup = tf.reshape(pre_sup,[xn, xm, nfilter])
-            pre_sup = tf.transpose(pre_sup, perm=[1,2,0]) #### [xm, nfilter, xn]
-            pre_sup = tf.reshape(pre_sup,[xm, xn*nfilter])
-            support = dot(self.support[i], pre_sup, sparse=True)
-            support = tf.reshape(support,[xm, nfilter, xn])
+            # _, _, nfilter = pre_sup.get_shape()
+            pre_sup = tf.reshape(pre_sup,[xn, xm, output_dim])
+            pre_sup = tf.transpose(pre_sup, perm=[1,2,0]) #### [xm, output_dim, xn]
+            pre_sup = tf.reshape(pre_sup,[xm, xn*output_dim]) ### [xm, xn*output_dim]
+            support = dot(self.support[i], pre_sup, sparse=True) ### [xm, xn*output_dim]
+            support = tf.reshape(support,[xm, output_dim, xn])
+            support = tf.transpose(support,perm=[2,0,1])  ### back to [xn, xm, nfilteroutput_dim]
             supports.append(support)
         output = tf.add_n(supports)  #### if working on K-neighborhood, there will be multiple supports
 
         # bias
         if self.bias:
+            output = tf.reshape(output, [xn*xm, output_dim])
+            output += self.vars['bias']
+            output = tf.reshape(output,[xn, xm, output_dim])
+
+        return self.act(output)
+
+class Batch_Dense(Layer): ### node wise dense layer
+    """Dense layer."""
+    def __init__(self, input_dim, output_dim, placeholders, dropout=0., sparse_inputs=False,
+                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
+        super(Dense, self).__init__(**kwargs)
+
+        if dropout:
+            self.dropout = placeholders['dropout']
+        else:
+            self.dropout = 0.
+
+        self.act = act
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+
+        # helper variable for sparse dropout
+        self.num_features_nonzero = placeholders['num_features_nonzero']
+
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['weights'] = glorot([input_dim, output_dim],
+                                          name='weights')
+            if self.bias:
+                self.vars['bias'] = zeros([output_dim], name='bias')
+
+        if self.logging:
+            self._log_vars()
+
+    def _call(self, inputs, output_dim):  ### input: [xn, xm, xk]; output: [xn, xm, output_dim]
+        x = inputs
+
+        xn, xm, xk = x.get_shape()
+
+        # dropout
+        if self.sparse_inputs:
+            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+        else:
+            x = tf.nn.dropout(x, 1-self.dropout)
+
+        # transform
+        x = tf.reshape(x,[xn*xm, xk])
+        output = dot(x, self.vars['weights'], sparse=self.sparse_inputs) ### [xn*xm, output_dim]
+
+        # bias
+        if self.bias:
             output += self.vars['bias']
 
+        output = tf.reshape(output,[xn,xm,output_dim])
+        return self.act(output)
+
+class Batch_FC(Layer): ### graph wise dense layer
+    """Dense layer."""
+    def __init__(self, input_dim, output_dim, placeholders, dropout=0., sparse_inputs=False,
+                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
+        super(Dense, self).__init__(**kwargs)
+
+        if dropout:
+            self.dropout = placeholders['dropout']
+        else:
+            self.dropout = 0.
+
+        self.act = act
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+
+        # helper variable for sparse dropout
+        self.num_features_nonzero = placeholders['num_features_nonzero']
+
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['weights'] = glorot([input_dim, output_dim],
+                                          name='weights')
+            if self.bias:
+                self.vars['bias'] = zeros([output_dim], name='bias')
+
+        if self.logging:
+            self._log_vars()
+
+    def _call(self, inputs, output_dim):  ### input: [xn, xm, xk]; output: [xn, output_dim]
+        x = inputs
+
+        xn, xm, xk = x.get_shape()
+
+        # dropout
+        if self.sparse_inputs:
+            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+        else:
+            x = tf.nn.dropout(x, 1-self.dropout)
+
+        # transform
+        x = tf.reshape(x,[xn, xm * xk])
+        output = dot(x, self.vars['weights'], sparse=self.sparse_inputs) ### [xn, output_dim]
+
+        # bias
+        if self.bias:
+            output += self.vars['bias']
+
+        # output = tf.reshape(output,[xn,xm,output_dim])
         return self.act(output)

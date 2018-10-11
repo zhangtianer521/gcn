@@ -46,9 +46,9 @@ else:
     raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
 
 ##########      wz: change input to be a batch group, stack the features
-bfeatures = []
+Batch_features = []
 for _ in range(10):
-    bfeatures.append(features)
+    Batch_features.append(features)
 
 
 
@@ -63,7 +63,7 @@ placeholders = {
 }
 
 # Create model
-model = model_func(placeholders, input_dim=features[2][1], logging=True)
+model = model_func(placeholders, input_dim=features[2][1], output_dim= 2,logging=True)
 
 # Initialize session
 sess = tf.Session()
