@@ -178,52 +178,54 @@ class GCN(Model):
     def predict(self):
         return tf.nn.softmax(self.outputs)
 
-    #### Add by Wen Zhang, For multimodal brain network fusion
 
-    class MBF(Model):
-        def __init__(self, placeholders, input_dim, **kwargs):
-            super(GCN, self).__init__(**kwargs)
+#### Add by Wen Zhang, For multimodal brain network fusion, inputs are batch subjects, hence features = dim(N,M,K)
+#### N subjects, M nodes and K signals each node.
 
-            self.inputs = placeholders['features']
-            self.input_dim = input_dim
-            # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
-            self.output_dim = placeholders['labels'].get_shape().as_list()[1]
-            self.placeholders = placeholders
+class MBF(Model):
+    def __init__(self, placeholders, input_dim, **kwargs):
+        super(GCN, self).__init__(**kwargs)
 
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+        self.inputs = placeholders['features']
+        self.input_dim = input_dim
+        # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
+        self.output_dim = placeholders['labels'].get_shape().as_list()[1]
+        self.placeholders = placeholders
 
-            self.build()
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
-        def _loss(self):
-            # Weight decay loss
-            for var in self.layers[0].vars.values():
-                self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
+        self.build()
 
-            # Cross entropy error
-            self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
-                                                      self.placeholders['labels_mask'])
+    def _loss(self):
+        # Weight decay loss
+        for var in self.layers[0].vars.values():
+            self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
 
-        def _accuracy(self):
-            self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
-                                            self.placeholders['labels_mask'])
+        # Cross entropy error
+        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
+                                                  self.placeholders['labels_mask'])
 
-        def _build(self):
-            # two layers
+    def _accuracy(self):
+        self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
+                                        self.placeholders['labels_mask'])
 
-            self.layers.append(GraphConvolution(input_dim=self.input_dim,
-                                                output_dim=FLAGS.hidden1,
-                                                placeholders=self.placeholders,
-                                                act=tf.nn.relu,
-                                                dropout=True,
-                                                sparse_inputs=True,
-                                                logging=self.logging))
+    def _build(self):
+        # two layers
 
-            self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
-                                                output_dim=self.output_dim,
-                                                placeholders=self.placeholders,
-                                                act=lambda x: x,  # lambda function, not non-linear return
-                                                dropout=True,
-                                                logging=self.logging))
+        self.layers.append(Batch_GraphConvolution(input_dim=self.input_dim,
+                                            output_dim=FLAGS.hidden1,
+                                            placeholders=self.placeholders,
+                                            act=tf.nn.relu,
+                                            dropout=True,
+                                            sparse_inputs=False,
+                                            logging=self.logging))
 
-        def predict(self):
-            return tf.nn.softmax(self.outputs)
+        self.layers.append(Batch_GraphConvolution(input_dim=FLAGS.hidden1,
+                                            output_dim=self.output_dim,
+                                            placeholders=self.placeholders,
+                                            act=lambda x: x,  # lambda function, not non-linear return
+                                            dropout=True,
+                                            logging=self.logging))
+
+    def predict(self):
+        return tf.nn.softmax(self.outputs)

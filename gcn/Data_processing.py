@@ -1,7 +1,7 @@
 import sklearn as skl
 from sklearn.covariance import GraphLassoCV
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import sys
 
 def data_reorder(Datadir):

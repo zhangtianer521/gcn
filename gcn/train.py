@@ -29,7 +29,7 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)
 
 # Some preprocessing
-features = preprocess_features(features)
+features = preprocess_features(features) ### normalize data matrix by row and transfer to sparsity vector form
 if FLAGS.model == 'gcn':
     support = [preprocess_adj(adj)]
     num_supports = 1
@@ -44,6 +44,13 @@ elif FLAGS.model == 'dense':
     model_func = MLP
 else:
     raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
+
+##########      wz: change input to be a batch group, stack the features
+bfeatures = []
+for _ in range(10):
+    bfeatures.append(features)
+
+
 
 # Define placeholders
 placeholders = {
