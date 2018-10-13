@@ -3,6 +3,7 @@ from sklearn.covariance import GraphLassoCV
 import numpy as np
 # import matplotlib.pyplot as plt
 import sys
+import csv
 
 def data_reorder(Datadir):
     ### read fmri signal data (.npy) and DTI network data (matlab matrix)
@@ -17,7 +18,14 @@ def data_reorder(Datadir):
         fmri_signal = np.load(Datadir+file+'_fmri.npy')
         fmri_signals.append(fmri_signal)
         DTI_connectivity = np.loadtxt(Datadir+file+'_fdt_matrix')
-        DTI_connects.append(DTI_connectivity)
+
+        ######################## need to fix, some subjects miss a brain region
+        if DTI_connectivity.shape[0] == 246:
+            DTI_connects.append(DTI_connectivity)
+
+        ########################
+
+
 
     ### stack the data in the 3rd dimension
     fmri_signals=np.stack(fmri_signals,axis=2)
@@ -25,6 +33,25 @@ def data_reorder(Datadir):
 
     return fmri_signals, DTI_connects
 
+def load_data(Datadir, labelscsv):  ### labels: a cvs file
+    features, graph = data_reorder(Datadir)
+
+    ### read cvs file [id, label]
+    labels = []
+    with open(labelscsv) as csvfile:
+        csv_reader = csv.reader(csvfile, delimiter = ',')
+        line = 0
+        for row in csv_reader:
+            if line == 0: continue
+            labels.append(row[1])
+
+    ### features: 3D array
+    ### graph: 2D array
+    ### labels: 1D list
+    return features, graph, labels
+
+
 
 if __name__ == '__main__':
-    data_reorder('/home/wen/Documents/gcn_kifp/Data/')
+    # data_reorder('/home/wen/Documents/gcn_kifp/Data/')
+    load_data('/home/wen/Documents/gcn_kifp/Data/', '/home/wen/Documents/gcn_kifp/Data/labels.csv')
