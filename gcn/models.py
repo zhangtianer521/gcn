@@ -184,7 +184,7 @@ class GCN(Model):
 #### Add by Wen Zhang, For multimodal brain network fusion, inputs are batch subjects, hence features = dim(N,M,K)
 #### N subjects, M nodes and K signals each node.
 
-class MBF(Model):
+class BNF(Model):
     def __init__(self, placeholders, input_dim, **kwargs):
         super(GCN, self).__init__(**kwargs)
 

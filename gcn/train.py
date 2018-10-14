@@ -5,7 +5,8 @@ import time
 import tensorflow as tf
 
 from gcn.utils import *
-from gcn.models import GCN, MLP
+from gcn.models import GCN, MLP, BNF
+from gcn.Data_processing import load_data
 
 # Set random seed
 seed = 123
@@ -16,7 +17,7 @@ tf.set_random_seed(seed)
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
-flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
+flags.DEFINE_string('model', 'BNF', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 16, 'Number of units in hidden layer 1.')
@@ -26,10 +27,10 @@ flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of e
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 
 # Load data
-adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)
+features, adj, labels = load_data(FLAGS.dataset)
 
 # Some preprocessing
-features = preprocess_features(features) ### normalize data matrix by row and transfer to sparsity vector form
+# features = preprocess_features(features) ### normalize data matrix by row and transfer to sparsity vector form
 if FLAGS.model == 'gcn':
     support = [preprocess_adj(adj)]
     num_supports = 1
@@ -42,25 +43,29 @@ elif FLAGS.model == 'dense':
     support = [preprocess_adj(adj)]  # Not used
     num_supports = 1
     model_func = MLP
+elif FLAGS.model == 'BNF':
+    support = adj  # Not used
+    num_supports = 1
+    model_func = BNF
 else:
     raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
 
 ##########      wz: change input to be a batch group, stack the features
-nsubj, nodes, signal_dim = features.shape()
+# nsubj, nodes, signal_dim = features.shape()
 
 
 # Define placeholders
 placeholders = {
     'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)], # number of adj parametrized matrixes
     'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features.shape(), dtype=tf.int64)),
-    'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
-    'labels_mask': tf.placeholder(tf.int32),
+    'labels': tf.placeholder(tf.float32, shape=(None, len(labels))),
+    # 'labels_mask': tf.placeholder(tf.int32),
     'dropout': tf.placeholder_with_default(0., shape=()),
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
 
 # Create model
-model = model_func(placeholders, input_dim=features[2][1], output_dim= 2,logging=True)
+model = model_func(placeholders, input_dim=features.shape[2], output_dim= 2,logging=True)
 
 # Initialize session
 sess = tf.Session()
