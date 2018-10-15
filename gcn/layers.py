@@ -263,7 +263,7 @@ class Batch_Dense(Layer): ### node wise dense layer
     """Dense layer."""
     def __init__(self, input_dim, output_dim, placeholders, dropout=0., sparse_inputs=False,
                  act=tf.nn.relu, bias=False, featureless=False, **kwargs):
-        super(Dense, self).__init__(**kwargs)
+        super(Batch_Dense, self).__init__(**kwargs)
 
         if dropout:
             self.dropout = placeholders['dropout']
@@ -313,7 +313,7 @@ class Batch_FC(Layer): ### graph wise dense layer
     """Dense layer."""
     def __init__(self, input_dim, output_dim, placeholders, dropout=0., sparse_inputs=False,
                  act=tf.nn.relu, bias=False, featureless=False, **kwargs):
-        super(Dense, self).__init__(**kwargs)
+        super(Batch_FC, self).__init__(**kwargs)
 
         if dropout:
             self.dropout = placeholders['dropout']

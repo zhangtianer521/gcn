@@ -34,6 +34,7 @@ class Model(object):
 
         self.output_dim = kwargs.get('output_dim',1)
 
+
     def _build(self):
         raise NotImplementedError
 
@@ -186,7 +187,7 @@ class GCN(Model):
 
 class BNF(Model):
     def __init__(self, placeholders, input_dim, **kwargs):
-        super(GCN, self).__init__(**kwargs)
+        super(BNF, self).__init__(**kwargs)
 
         self.inputs = placeholders['features']
         self.input_dim = input_dim
@@ -235,7 +236,7 @@ class BNF(Model):
                                  logging=self.logging))
 
         self.layers.append(Batch_FC(input_dim=FLAGS.hidden2,
-                                       output_dim=FLAGS.output_dim,
+                                       output_dim=self.output_dim,
                                        placeholders=self.placeholders,
                                        act=lambda x: x,
                                        dropout=True,
