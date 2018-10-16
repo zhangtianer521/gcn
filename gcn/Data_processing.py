@@ -4,6 +4,7 @@ import numpy as np
 # import matplotlib.pyplot as plt
 import sys
 import csv
+import pandas as pd
 
 def data_reorder(Datadir):
     ### read fmri signal data (.npy) and DTI network data (matlab matrix)
@@ -29,6 +30,7 @@ def data_reorder(Datadir):
 
     ### stack the data in the 3rd dimension
     fmri_signals=np.stack(fmri_signals,axis=2)
+    fmri_signals = np.transpose(fmri_signals,(2,1,0))
     DTI_connects=np.mean(np.stack(DTI_connects,axis=2),axis=2)
     DTI_connects[DTI_connects<50]=0
     DTI_connects = DTI_connects/(DTI_connects.sum(axis=1).transpose())
@@ -50,10 +52,14 @@ def load_data(Datadir, labelscsv):  ### labels: a cvs file
                 continue
             labels.append(row[1])
 
-    ### features: 3D array
+    ### features: 3D array, [#subjects, #nodes, #feature_per_node]
     ### graph: 2D array
     ### labels: 1D list
-    return features, graph, labels
+    return features, [graph], one_hot(labels)
+
+def one_hot(labels):
+    s = pd.Series(labels)
+    return pd.get_dummies(s)
 
 
 

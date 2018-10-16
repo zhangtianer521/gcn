@@ -5,7 +5,7 @@ import time
 import tensorflow as tf
 
 from gcn.utils import *
-from gcn.models import GCN, MLP, BNF
+from gcn.models import GCN, BNF
 from gcn.Data_processing import load_data
 
 # Set random seed
@@ -19,17 +19,19 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('dataset', '../Data/', 'Dataset string.')
 flags.DEFINE_string('idcsv', '../Data/labels.csv', 'Dataset id.')
 flags.DEFINE_string('model', 'BNF', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
+flags.DEFINE_float('nodesize', 246, 'Node size of Adj matrix')
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
+flags.DEFINE_integer('epochs', 2000, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 16, 'Number of units in hidden layer 1.')
-flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
+flags.DEFINE_integer('hidden2', 8, 'Number of units in hidden layer 2.')
 flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
-flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
+flags.DEFINE_integer('early_stopping', 50, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 
 # Load data
 features, adj, labels = load_data(FLAGS.dataset,FLAGS.idcsv)
+
 
 # Some preprocessing
 # features = preprocess_features(features) ### normalize data matrix by row and transfer to sparsity vector form
@@ -41,10 +43,6 @@ elif FLAGS.model == 'gcn_cheby':
     support = chebyshev_polynomials(adj, FLAGS.max_degree)
     num_supports = 1 + FLAGS.max_degree
     model_func = GCN
-elif FLAGS.model == 'dense':
-    support = [preprocess_adj(adj)]  # Not used
-    num_supports = 1
-    model_func = MLP
 elif FLAGS.model == 'BNF':
     support = adj  # Not used
     num_supports = 1
@@ -58,8 +56,8 @@ else:
 
 # Define placeholders
 placeholders = {
-    'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)], # number of adj parametrized matrixes
-    'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features.shape, dtype=tf.int64)),
+    'support': [tf.placeholder(tf.float32) for _ in range(num_supports)], # number of adj parametrized matrices
+    'features': tf.placeholder(tf.float32, shape=features.shape),
     'labels': tf.placeholder(tf.float32, shape=(None, 2)),
     # 'labels_mask': tf.placeholder(tf.int32),
     'dropout': tf.placeholder_with_default(0., shape=()),
@@ -74,9 +72,9 @@ sess = tf.Session()
 
 
 # Define model evaluation function
-def evaluate(features, support, labels, mask, placeholders):
+def evaluate(features, support, labels, placeholders):
     t_test = time.time()
-    feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
+    feed_dict_val = construct_feed_dict(features, support, labels, placeholders)
     outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
     return outs_val[0], outs_val[1], (time.time() - t_test)
 
@@ -91,7 +89,7 @@ for epoch in range(FLAGS.epochs):
 
     t = time.time()
     # Construct feed dictionary
-    feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders) # assign the first 4 values to placeholders
+    feed_dict = construct_feed_dict(features, support, labels, placeholders) # assign the first 4 values to placeholders
 
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
 
@@ -99,7 +97,7 @@ for epoch in range(FLAGS.epochs):
     outs = sess.run([model.opt_op, model.loss, model.accuracy], feed_dict=feed_dict)
 
     # Validation
-    cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
+    cost, acc, duration = evaluate(features, support, labels, placeholders)
     cost_val.append(cost)
 
     # Print results
@@ -113,7 +111,7 @@ for epoch in range(FLAGS.epochs):
 
 print("Optimization Finished!")
 
-# Testing
-test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
-print("Test set results:", "cost=", "{:.5f}".format(test_cost),
-      "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
+# # Testing
+# test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
+# print("Test set results:", "cost=", "{:.5f}".format(test_cost),
+#       "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))

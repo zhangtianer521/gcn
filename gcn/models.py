@@ -7,7 +7,7 @@ FLAGS = flags.FLAGS
 
 class Model(object):
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging'}
+        allowed_kwargs = {'name', 'logging','output_dim'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -46,7 +46,7 @@ class Model(object):
         # Build sequential layer model
         self.activations.append(self.inputs)
         for layer in self.layers: # each layer would give out a signal (hidden) and store it to activations, hence concatenate layers
-            hidden = layer(self.activations[-1],self.output_dim)
+            hidden = layer(self.activations[-1])
             self.activations.append(hidden)
         self.outputs = self.activations[-1]
 
@@ -85,51 +85,6 @@ class Model(object):
         print("Model restored from file: %s" % save_path)
 
 
-class MLP(Model):
-    def __init__(self, placeholders, input_dim, **kwargs):
-        super(MLP, self).__init__(**kwargs)
-
-        self.inputs = placeholders['features']
-        self.input_dim = input_dim
-        # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
-        self.output_dim = placeholders['labels'].get_shape().as_list()[1]
-        self.placeholders = placeholders
-
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
-
-        self.build()
-
-    def _loss(self):
-        # Weight decay loss
-        for var in self.layers[0].vars.values():
-            self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
-
-        # Cross entropy error
-        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
-                                                  self.placeholders['labels_mask'])
-
-    def _accuracy(self):
-        self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
-                                        self.placeholders['labels_mask'])
-
-    def _build(self):
-        self.layers.append(Dense(input_dim=self.input_dim,
-                                 output_dim=FLAGS.hidden1,
-                                 placeholders=self.placeholders,
-                                 act=tf.nn.relu,
-                                 dropout=True,
-                                 sparse_inputs=True,
-                                 logging=self.logging))
-
-        self.layers.append(Dense(input_dim=FLAGS.hidden1,
-                                 output_dim=self.output_dim,
-                                 placeholders=self.placeholders,
-                                 act=lambda x: x,
-                                 dropout=True,
-                                 logging=self.logging))
-
-    def predict(self):
-        return tf.nn.softmax(self.outputs)
 
 
 class GCN(Model):
@@ -206,6 +161,7 @@ class BNF(Model):
 
         # Cross entropy error, outputs [xn, output_dim], labels [xn, output_dim]
         self.loss += tf.nn.softmax_cross_entropy_with_logits(logits=self.outputs, labels=self.placeholders['labels'])
+        self.loss = tf.reduce_mean(self.loss,axis=0)
 
     def _accuracy(self):
         self.accuracy = accuracy(self.outputs, self.placeholders['labels'])
@@ -236,12 +192,13 @@ class BNF(Model):
                                  logging=self.logging))
 
         self.layers.append(Batch_FC(input_dim=FLAGS.hidden2,
-                                       output_dim=self.output_dim,
-                                       placeholders=self.placeholders,
-                                       act=lambda x: x,
-                                       dropout=True,
-                                       sparse_inputs=False,
-                                       logging=self.logging))
+                                    output_dim=self.output_dim,
+                                    node_dim=FLAGS.nodesize,
+                                    placeholders=self.placeholders,
+                                    act=tf.nn.relu,
+                                    dropout=True,
+                                    sparse_inputs=False,
+                                    logging=self.logging))
 
 
     def predict(self):
