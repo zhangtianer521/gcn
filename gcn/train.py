@@ -16,21 +16,22 @@ tf.set_random_seed(seed)
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_string('dataset', '../Data/', 'Dataset string.')
-flags.DEFINE_string('idcsv', '../Data/labels.csv', 'Dataset id.')
+flags.DEFINE_string('dataset', '../Data/Autism/', 'Dataset string.')
+flags.DEFINE_string('idcsv', '../Data/Autism/labels.csv', 'Dataset id.')
 flags.DEFINE_string('model', 'BNF', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('nodesize', 246, 'Node size of Adj matrix')
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 2000, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 16, 'Number of units in hidden layer 1.')
+flags.DEFINE_integer('epochs', 20000, 'Number of epochs to train.')
+flags.DEFINE_integer('hidden1', 64, 'Number of units in hidden layer 1.')
 flags.DEFINE_integer('hidden2', 8, 'Number of units in hidden layer 2.')
-flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
-flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
-flags.DEFINE_integer('early_stopping', 50, 'Tolerance for early stopping (# of epochs).')
+flags.DEFINE_float('dropout', 0.4, 'Dropout rate (1 - keep probability).')
+flags.DEFINE_float('weight_decay', 5e-3, 'Weight for L2 loss on embedding matrix.')
+flags.DEFINE_integer('early_stopping', 1000, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 
 # Load data
-features, adj, labels = load_data(FLAGS.dataset,FLAGS.idcsv)
+
+train_features, adj, train_labels, test_features, test_labels = load_data(FLAGS.dataset,FLAGS.idcsv)
 
 
 # Some preprocessing
@@ -57,7 +58,7 @@ else:
 # Define placeholders
 placeholders = {
     'support': [tf.placeholder(tf.float32) for _ in range(num_supports)], # number of adj parametrized matrices
-    'features': tf.placeholder(tf.float32, shape=features.shape),
+    'features': tf.placeholder(tf.float32, shape=(None,train_features.shape[1],train_features.shape[2])),
     'labels': tf.placeholder(tf.float32, shape=(None, 2)),
     # 'labels_mask': tf.placeholder(tf.int32),
     'dropout': tf.placeholder_with_default(0., shape=()),
@@ -65,7 +66,7 @@ placeholders = {
 }
 
 # Create model
-model = model_func(placeholders, input_dim=features.shape[2],output_dim=2,logging=True)
+model = model_func(placeholders, input_dim=train_features.shape[2],output_dim=2,logging=True)
 
 # Initialize session
 sess = tf.Session()
@@ -74,6 +75,8 @@ sess = tf.Session()
 # Define model evaluation function
 def evaluate(features, support, labels, placeholders):
     t_test = time.time()
+    # placeholders_test = placeholders
+    # placeholders_test['features']=tf.placeholder(tf.float32, shape=features.shape)
     feed_dict_val = construct_feed_dict(features, support, labels, placeholders)
     outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
     return outs_val[0], outs_val[1], (time.time() - t_test)
@@ -89,7 +92,7 @@ for epoch in range(FLAGS.epochs):
 
     t = time.time()
     # Construct feed dictionary
-    feed_dict = construct_feed_dict(features, support, labels, placeholders) # assign the first 4 values to placeholders
+    feed_dict = construct_feed_dict(train_features, support, train_labels, placeholders) # assign the first 4 values to placeholders
 
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
 
@@ -97,7 +100,7 @@ for epoch in range(FLAGS.epochs):
     outs = sess.run([model.opt_op, model.loss, model.accuracy], feed_dict=feed_dict)
 
     # Validation
-    cost, acc, duration = evaluate(features, support, labels, placeholders)
+    cost, acc, duration = evaluate(test_features, support, test_labels, placeholders)
     cost_val.append(cost)
 
     # Print results

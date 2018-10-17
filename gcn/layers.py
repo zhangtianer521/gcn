@@ -132,7 +132,8 @@ class Batch_GraphConvolution(Layer):
         for i in range(len(self.support)):
             if not self.featureless:
                 #### batch only useful to non-sparse inputs, dim(pre_sup) = [xn*xm,output_dim], T is the filters number
-                x=tf.reshape(x,[xn*xm,xk])
+                # x=tf.reshape(x,[xn*xm,xk])
+                x = tf.reshape(x, [-1, xk])
                 pre_sup = dot(x, self.vars['weights_' + str(i)],
                               sparse=self.sparse_inputs)
             else:
@@ -140,11 +141,11 @@ class Batch_GraphConvolution(Layer):
 
             #### transpost pre_sup to have proper left multiplication
             # _, _, nfilter = pre_sup.get_shape()
-            pre_sup = tf.reshape(pre_sup,[xn, xm, self.output_dim])
+            pre_sup = tf.reshape(pre_sup,[-1, xm, self.output_dim])
             pre_sup = tf.transpose(pre_sup, perm=[1,2,0]) #### [xm, output_dim, xn]
-            pre_sup = tf.reshape(pre_sup,[xm, xn*self.output_dim]) ### [xm, xn*output_dim]
+            pre_sup = tf.reshape(pre_sup,[xm, -1]) ### [xm, xn*output_dim]
             support = dot(self.support[i], pre_sup, sparse=False) ### [xm, xn*output_dim]
-            support = tf.reshape(support,[xm, self.output_dim, xn])
+            support = tf.reshape(support,[xm, self.output_dim, -1])
             support = tf.transpose(support,perm=[2,0,1])  ### back to [xn, xm, nfilteroutput_dim]
             supports.append(support)
         output = tf.add_n(supports)  #### if working on K-neighborhood, there will be multiple supports
@@ -198,14 +199,14 @@ class Batch_Dense(Layer): ### node wise dense layer
             x = tf.nn.dropout(x, 1-self.dropout)
 
         # transform
-        x = tf.reshape(x,[xn*xm, xk])
+        x = tf.reshape(x,[-1, xk])
         output = dot(x, self.vars['weights'], sparse=self.sparse_inputs) ### [xn*xm, output_dim]
 
         # bias
         if self.bias:
             output += self.vars['bias']
 
-        output = tf.reshape(output,[xn,xm,self.output_dim])
+        output = tf.reshape(output,[-1,xm,self.output_dim])
         return self.act(output)
 
 class Batch_FC(Layer): ### graph wise dense layer
@@ -249,7 +250,7 @@ class Batch_FC(Layer): ### graph wise dense layer
             x = tf.nn.dropout(x, 1-self.dropout)
 
         # transform
-        x = tf.reshape(x,[xn, xm * xk])
+        x = tf.reshape(x,[-1, xm * xk])
         output = dot(x, self.vars['weights'], sparse=self.sparse_inputs) ### [xn, output_dim]
 
         # bias

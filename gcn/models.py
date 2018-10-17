@@ -195,7 +195,7 @@ class BNF(Model):
                                     output_dim=self.output_dim,
                                     node_dim=FLAGS.nodesize,
                                     placeholders=self.placeholders,
-                                    act=tf.nn.relu,
+                                    act=lambda x: x,
                                     dropout=True,
                                     sparse_inputs=False,
                                     logging=self.logging))
